@@ -19,11 +19,7 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
         self.backbone = nn.ModuleList([nn.Sequential(
-                            nn.Conv2d(3, 16, kernel_size=3, stride=2, padding=1),   # 64x64 -> 32x32
-                            nn.BatchNorm2d(16),
-                            nn.ReLU(),),
-                        nn.Sequential(
-                            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),  # 32x32 -> 32x32
+                            nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),   # 64x64 -> 32x32
                             nn.BatchNorm2d(32),
                             nn.ReLU(),),
                         nn.Sequential(
@@ -31,30 +27,38 @@ class MyModel(nn.Module):
                             nn.BatchNorm2d(64),
                             nn.ReLU(),),
                         nn.Sequential(
-                            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # 16x16 -> 16x16
+                            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),  # 16x16 -> 8x8
                             nn.BatchNorm2d(128),
+                            nn.ReLU(),),
+                        nn.Sequential(
+                            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),  # 8x8 -> 4x4
+                            nn.BatchNorm2d(256),
                             nn.ReLU(),    
                         )])
 
         self.classification_head = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),  # 16x16 -> 1x1
             nn.Flatten(),
-            nn.Linear(128, 64),
+            nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Linear(64, output_size)
+            nn.Dropout(0.1),
+            nn.Linear(128, output_size)
         )
         
         self.segmentation_head = nn.ModuleList([nn.Sequential(
-                                    nn.ConvTranspose2d(128, 64, kernel_size=3, stride=1, padding=1),  # 16x16 -> 16x16
-                                    nn.ReLU(),),
+                                    nn.ConvTranspose2d(256, 128, kernel_size=4, stride=2, padding=1),  # 8x8 -> 16x16
+                                    #nn.ReLU(),
+                                    ),
                                 nn.Sequential(                                
-                                    nn.ConvTranspose2d(64+64, 32, kernel_size=4, stride=2, padding=1),  # 16x16 -> 32x32
-                                    nn.ReLU(),),
+                                    nn.ConvTranspose2d(128+128, 64, kernel_size=4, stride=2, padding=1),  # 16x16 -> 32x32
+                                    #nn.ReLU(),
+                                    ),
                                 nn.Sequential(
-                                    nn.ConvTranspose2d(32+32, 16, kernel_size=3, stride=1, padding=1),  # 32x32 -> 32x32
-                                    nn.ReLU(),),
+                                    nn.ConvTranspose2d(64+64, 32, kernel_size=4, stride=2, padding=1),  # 32x32 -> 32x32
+                                    #nn.ReLU(),
+                                    ),
                                 nn.Sequential(
-                                    nn.ConvTranspose2d(16+16, 1, kernel_size=4, stride=2, padding=1),),
+                                    nn.ConvTranspose2d(32+32, 1, kernel_size=4, stride=2, padding=1),),
                                 ])    # 32x32 -> 64x64
 
         

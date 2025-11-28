@@ -1,5 +1,5 @@
 data_dir: "fruit/"
-batch_size: 64
+batch_size: 32
 learning_rate: 0.0005
 num_epochs: 120
 random_seed: 42
@@ -10,5 +10,5 @@ image_size: [64, 64]
 validate_every: 10
 triplet_margin: 1.0
 species_loss_weight: 1.0
-segmentation_loss_weight: 2.0
+segmentation_loss_weight: 1.0
 triplet_loss_weight: 1.0
