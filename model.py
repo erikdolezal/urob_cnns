@@ -8,12 +8,12 @@ class ResidualBlock(nn.Module):
         self.fwd = nn.Sequential(
             nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(channels),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(channels),
         )
     def forward(self, x):
-        return nn.ReLU()(x + self.fwd(x))
+        return nn.ReLU(inplace=True)(x + self.fwd(x))
     
 class AttentionBlock(nn.Module):
     def __init__(self, channels, reduction=4):
@@ -21,7 +21,7 @@ class AttentionBlock(nn.Module):
         self.fwd = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
             nn.Conv2d(channels, channels // reduction, kernel_size=1),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Conv2d(channels // reduction, channels, kernel_size=1),
             nn.Sigmoid(),
         )
@@ -36,7 +36,7 @@ class ENConvBlock(nn.Module):
         self.fwd = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             AttentionBlock(out_channels),
             ResidualBlock(out_channels),
         )
@@ -50,7 +50,7 @@ class DEConvBlock(nn.Module):
         self.fwd = nn.Sequential(
             nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             ResidualBlock(out_channels),
         )
 
@@ -62,7 +62,7 @@ class MyModel(nn.Module):
     MyModel is a custom neural network model for image classification and segmentation and vectorization.
     """
 
-    def __init__(self, output_size=30):
+    def __init__(self, input_size=64, hidden_size=128, output_size=30):
         """Initialize the model.
 
         Args:
@@ -83,7 +83,7 @@ class MyModel(nn.Module):
             nn.AdaptiveAvgPool2d((1, 1)),  # 16x16 -> 1x1
             nn.Flatten(),
             nn.Linear(128, 64),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Dropout(0.3),
             nn.Linear(64, output_size)
         )

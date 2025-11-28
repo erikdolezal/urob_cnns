@@ -21,7 +21,7 @@ def get_device():
     """Get the device to be used for training.
 
     Returns:
-        torch.device: The device to be used (CPU or GPU).  
+        torch.device: The device to be used (CPU or GPU).
     """
     if torch.cuda.is_available():
         return torch.device("cuda")
@@ -39,7 +39,7 @@ class FruitDataset(Dataset):
     """
 
     def __init__(self, data_dir, config):
-        self.data_dir = data_dir # ‼️‼️‼️‼️ directory with your data ‼️‼️‼️‼️
+        self.data_dir = data_dir 
         self.images = []
         self.masks = []
         self.metadata = []
@@ -52,15 +52,15 @@ class FruitDataset(Dataset):
         unique_fruits = sorted(list(set(self.metadata)))
         name_to_label = {name: idx for idx, name in enumerate(unique_fruits)}
         self.labels = [name_to_label[name] for name in self.metadata]
-        self.config = config  # loaded yaml config
-        self.loaded_images = {}  # ‼️‼️‼️‼️ To store loaded images if caching is enabled ‼️‼️‼️‼️
+        self.config = config  
+        self.loaded_images = {}  
 
     def __len__(self):  # ‼️‼️‼️‼️
         """Return the total number of samples in the dataset.
         """
-        return len(self.images) # ‼️‼️‼️‼️ TODO ‼️‼️‼️‼️
+        return len(self.images)
 
-    def __getitem__(self, idx):  # ‼️‼️‼️‼️
+    def __getitem__(self, idx):  
         """Get a sample from the dataset.
 
         Args:
@@ -82,7 +82,6 @@ class FruitDataset(Dataset):
         else:
             image_path = self.images[idx]
             mask_path = self.masks[idx]
-
             image = Image.open(image_path).convert("RGB")
             mask = Image.open(mask_path).convert("L")
 
@@ -344,7 +343,7 @@ def create_triplets_batch(anchor_embeddings, anchor_labels, anchor_idxs,
     return triplets
 
 
-def compute_triplet_loss(triplets, margin=1.0):  # ‼️‼️‼️‼️
+def compute_triplet_loss(triplets, margin=1.0):  
     """Compute triplet loss for a batch of triplets.
 
     Args:
@@ -446,26 +445,24 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
     logger.info(f"Training fold {fold_num}...")
     best_val_score = 0.0
     device = get_device()
-    species_criterion = torch.nn.CrossEntropyLoss()  # ‼️‼️‼️‼️ Define your criterion ‼️‼️‼️‼️
-    mask_criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([1], device=device)) # ‼️‼️‼️‼️ Define your criterion ‼️‼️‼️‼️
-    optimizer = torch.optim.Adam(model.parameters(), lr=config['learning_rate'])  # ‼️‼️‼️‼️ Define your optimizer ‼️‼️‼️‼️
+    species_criterion = torch.nn.CrossEntropyLoss()  
+    mask_criterion = torch.nn.BCEWithLogitsLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=config['learning_rate'])  
     fold_dir = os.path.join(exp_dir, "models", f"fold_{fold_num}")
     os.makedirs(fold_dir, exist_ok=True)
 
     # Compute initial embedding bank once before training
     logger.info("Computing initial embedding bank...")
-    # ‼️‼️‼️‼️ Compute embedding bank before training for the training set ‼️‼️‼️‼️
-    embedding_bank, all_labels = compute_embedding_bank(train_loader.dataset, model)
-    # ‼️‼️‼️‼️ Compute embedding bank for validation set ‼️‼️‼️‼️
-    embedding_bank_val, all_labels_val = compute_embedding_bank(val_loader.dataset, model)
+    embedding_bank, all_labels = compute_embedding_bank(
+        train_loader.dataset, model)
+    embedding_bank_val, all_labels_val = compute_embedding_bank(
+        val_loader.dataset, model)
 
     for epoch in range(config['num_epochs']):
         trn_loss = 0.0
         train_correct = 0
         train_total = 0
-        # ‼️‼️‼️‼️ SET MODEL TO TRAIN MODE ‼️‼️‼️‼️
         model.train()
-
         # Training loop with tqdm progress bar
         train_pbar = tqdm(train_loader, desc=f"Fold {fold_num} - Epoch {epoch + 1}/{config['num_epochs']} [Train]",
                           leave=False, unit="batch")
@@ -475,10 +472,9 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
             masks = masks.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
 
-            # ‼️‼️‼️‼️ ZERO GRAD! ‼️‼️‼️‼️
             optimizer.zero_grad()
 
-            outputs, masks_pred, embeddings = model(images) # ‼️‼️‼️‼️ make predictions ‼️‼️‼️‼️
+            outputs, masks_pred, embeddings = model(images)
 
             # update embedding bank with current batch
             all_embeddings = embeddings.detach()
@@ -489,32 +485,31 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
             embedding_bank[idxs] = all_embeddings
 
             # Classification loss
-            classification_loss = species_criterion(outputs, labels) # ‼️‼️‼️‼️ compute species loss ‼️‼️‼️‼️
+            classification_loss = species_criterion(outputs, labels)
 
             # Segmentation loss - ensure both tensors are float32 and same shape
-            segmentation_loss = mask_criterion(masks_pred, masks)  # ‼️‼️‼️‼️ compute mask loss ‼️‼️‼️‼️
+            segmentation_loss = mask_criterion(masks_pred.float(), masks.float())
 
             # triplet loss
-            triplets = create_triplets_batch(embeddings, labels, idxs, embedding_bank, all_labels) # ‼️‼️‼️‼️ create triplets ‼️‼️‼️‼️
+            triplets = create_triplets_batch(embeddings, labels, idxs,
+                                            embedding_bank, all_labels, hard_percentage=0.2)
 
             if len(triplets) > 0:
-                triplet_loss = compute_triplet_loss(triplets, margin=config['triplet_margin']) # ‼️‼️‼️‼️ compute triplet loss ‼️‼️‼️‼️
+                triplet_loss = compute_triplet_loss(triplets, margin=config['triplet_margin'])
             else:
                 triplet_loss = torch.tensor(0.0, device=images.device)
 
             # Combine losses with weights
             loss = (classification_loss * config['species_loss_weight'] + 
                     segmentation_loss * config['segmentation_loss_weight'] + 
-                    triplet_loss * config['triplet_loss_weight'])  # ‼️‼️‼️‼️ compute combined loss ‼️‼️‼️‼️
+                    triplet_loss * config['triplet_loss_weight'])
 
             # Check for invalid loss values
             if torch.isnan(loss) or torch.isinf(loss):
                 logger.warning(f"Invalid loss detected: {loss.item()}")
                 continue
 
-            # ‼️‼️‼️‼️ BACKPROPAGATE AND MAKE OPTIMIZER STEP ‼️‼️‼️‼️
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             batch_loss = loss.item()
@@ -552,7 +547,6 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
 
         if (epoch + 1) % config['validate_every'] == 0:
             # validate the model
-            # ‼️‼️‼️‼️ SET MODEL TO VALIDATION MODE ‼️‼️‼️‼️
             model.eval()
             val_loss = 0.0
             correct = 0
@@ -566,10 +560,10 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
 
             with torch.no_grad():
                 for batch_idx, (images, masks, metadata, labels, idxs) in enumerate(val_pbar):
-                    images = images.to(device)
-                    masks = masks.to(device)
-                    labels = labels.to(device)
-
+                    images = images.to(device, non_blocking=True)
+                    masks = masks.to(device, non_blocking=True)
+                    labels = labels.to(device, non_blocking=True)
+                    
                     outputs, masks_pred, embeddings = model(images)
 
                     # Update embedding bank with current batch
@@ -581,22 +575,24 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
                     embedding_bank_val[idxs] = all_embeddings
 
                     # Classification loss
-                    classification_loss = species_criterion(outputs, labels) # ‼️‼️‼️‼️ compute species loss ‼️‼️‼️‼️
+
+                    classification_loss = species_criterion(outputs, labels)
 
                     # Segmentation loss
-                    segmentation_loss = mask_criterion(masks_pred, masks) # ‼️‼️‼️‼️ compute mask loss ‼️‼️‼️‼️
+                    segmentation_loss = mask_criterion(masks_pred.float(), masks.float())
                     # triplet loss using updated embedding bank
-                    triplets = create_triplets_batch(embeddings, labels, idxs, embedding_bank_val, all_labels_val) # ‼️‼️‼️‼️ create triplets ‼️‼️‼️‼️
+                    triplets = create_triplets_batch(embeddings, labels, idxs,
+                                                    embedding_bank_val, all_labels_val, hard_percentage=0.2)
 
                     if len(triplets) > 0:
-                        triplet_loss = compute_triplet_loss(triplets, config['triplet_margin']) # ‼️‼️‼️‼️ compute triplet loss ‼️‼️‼️‼️
+                        triplet_loss = compute_triplet_loss(triplets, margin=config['triplet_margin'])
                     else:
                         triplet_loss = torch.tensor(0.0, device=images.device)
 
                     # Combined loss
                     loss = (classification_loss * config['species_loss_weight'] + 
                             segmentation_loss * config['segmentation_loss_weight'] + 
-                            triplet_loss * config['triplet_loss_weight'])  # ‼️‼️‼️‼️ compute combined loss ‼️‼️‼️‼️
+                            triplet_loss * config['triplet_loss_weight'])
 
                     batch_loss = loss.item()
                     val_loss += batch_loss
@@ -755,7 +751,8 @@ def main():
 
         # Training loop for current fold
         input_dim = 786432
-        model = MyModel(output_size=config['output_dim'])
+        model = MyModel(input_size=input_dim,
+                        hidden_size=128, output_size=config['output_dim'])
         model.to(torch.device(get_device()))
         fold_result = run_fold(
             train_loader, val_loader, config, fold + 1, exp_dir, logger, model, writer)
