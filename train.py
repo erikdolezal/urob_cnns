@@ -46,8 +46,12 @@ class FruitDataset(Dataset):
         for folder in os.listdir(data_dir):
             if os.path.isdir(os.path.join(data_dir, folder)):
                 folder_path = os.path.join(data_dir, folder)
-                self.images.extend([os.path.join(folder_path, "Images", img) for img in os.listdir(os.path.join(folder_path, "Images"))])
-                self.masks.extend([os.path.join(folder_path, "Mask", msk) for msk in os.listdir(os.path.join(folder_path, "Mask"))])
+                for img in os.listdir(os.path.join(folder_path, "Images")):
+                    self.images.append(os.path.join(folder_path, "Images", img))
+                    base, _ = os.path.splitext(img)
+                    mask_file = base + "_mask.png"
+                    mask_path = os.path.join(folder_path, "Mask", mask_file)
+                    self.masks.append(mask_path)
                 self.metadata.extend([folder] * len(os.listdir(os.path.join(folder_path, "Images"))))
         unique_fruits = sorted(list(set(self.metadata)))
         name_to_label = {name: idx for idx, name in enumerate(unique_fruits)}
@@ -75,10 +79,9 @@ class FruitDataset(Dataset):
             idx (int): The index of the sample.
         """
 
-        # ‼️‼️‼️‼️ TODO ‼️‼️‼️‼️
         if self.config['cache_images'] and idx in self.loaded_images:
-            image = self.loaded_images[idx]['image']
-            mask = self.loaded_images[idx]['mask']
+            image = self.loaded_images[idx][0]
+            mask = self.loaded_images[idx][1]
         else:
             image_path = self.images[idx]
             mask_path = self.masks[idx]
@@ -104,7 +107,7 @@ class FruitDataset(Dataset):
             image = torch.tensor(image, dtype=torch.float32).permute(2, 0, 1)
             mask = torch.tensor(mask, dtype=torch.float32).permute(2, 0, 1)
             if self.config['cache_images']:
-                self.loaded_images[idx] = {'image': image, 'mask': mask}
+                self.loaded_images[idx] = (image, mask)
 
         metadata = self.metadata[idx]
         label = torch.tensor(self.labels[idx], dtype=torch.long)
@@ -477,7 +480,7 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
             outputs, masks_pred, embeddings = model(images)
 
             # update embedding bank with current batch
-            all_embeddings = embeddings.detach()
+            all_embeddings = torch.nn.functional.normalize(embeddings.detach(), dim=1)
             if not torch.is_tensor(idxs):
                 idxs = torch.tensor(idxs, device=images.device)
             else:
@@ -492,7 +495,7 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
 
             # triplet loss
             triplets = create_triplets_batch(embeddings, labels, idxs,
-                                            embedding_bank, all_labels, hard_percentage=0.2)
+                                            embedding_bank, all_labels, hard_percentage=config['hard_percentage'])
 
             if len(triplets) > 0:
                 triplet_loss = compute_triplet_loss(triplets, margin=config['triplet_margin'])
@@ -516,7 +519,6 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
             trn_loss += batch_loss
 
             # Calculate training accuracy (add this section for TensorBoard logging)
-            # ‼️‼️‼️‼️ Students: calculate predictions from outputs and compare with labels ‼️‼️‼️‼️
             with torch.no_grad():
                 predictions = outputs.argmax(dim=1)
                 train_correct += (predictions == labels).sum().item()
@@ -567,7 +569,7 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
                     outputs, masks_pred, embeddings = model(images)
 
                     # Update embedding bank with current batch
-                    all_embeddings = embeddings.detach()
+                    all_embeddings = torch.nn.functional.normalize(embeddings.detach(), dim=1)
                     if not torch.is_tensor(idxs):
                         idxs = torch.tensor(idxs, device=images.device)
                     else:
