@@ -447,7 +447,7 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
     best_val_score = 0.0
     device = get_device()
     species_criterion = torch.nn.CrossEntropyLoss()  # ‼️‼️‼️‼️ Define your criterion ‼️‼️‼️‼️
-    mask_criterion = torch.nn.BCEWithLogitsLoss() # ‼️‼️‼️‼️ Define your criterion ‼️‼️‼️‼️
+    mask_criterion = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([1], device=device)) # ‼️‼️‼️‼️ Define your criterion ‼️‼️‼️‼️
     optimizer = torch.optim.Adam(model.parameters(), lr=config['learning_rate'])  # ‼️‼️‼️‼️ Define your optimizer ‼️‼️‼️‼️
     fold_dir = os.path.join(exp_dir, "models", f"fold_{fold_num}")
     os.makedirs(fold_dir, exist_ok=True)
@@ -514,6 +514,7 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
 
             # ‼️‼️‼️‼️ BACKPROPAGATE AND MAKE OPTIMIZER STEP ‼️‼️‼️‼️
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             batch_loss = loss.item()

@@ -2,37 +2,56 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+class ResidualBlock(nn.Module):
+    def __init__(self, channels):
+        super(ResidualBlock, self).__init__()
+        self.fwd = nn.Sequential(
+            nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(channels),
+            nn.ReLU(),
+            nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(channels),
+        )
+    def forward(self, x):
+        return nn.ReLU()(x + self.fwd(x))
+    
+class AttentionBlock(nn.Module):
+    def __init__(self, channels, reduction=4):
+        super(AttentionBlock, self).__init__()
+        self.fwd = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(channels, channels // reduction, kernel_size=1),
+            nn.ReLU(),
+            nn.Conv2d(channels // reduction, channels, kernel_size=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        attention = self.fwd(x)
+        return x * attention
+
 class ENConvBlock(nn.Module):
-    def __init__(self, in_channels, mid_channels, out_channels):
+    def __init__(self, in_channels, out_channels):
         super(ENConvBlock, self).__init__()
         self.fwd = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=3, stride=2, padding=1),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(),
-            nn.Conv2d(mid_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
+            AttentionBlock(out_channels),
+            ResidualBlock(out_channels),
         )
 
     def forward(self, x):
         return self.fwd(x)
 
 class DEConvBlock(nn.Module):
-    def __init__(self, in_channels, mid_channels, out_channels):
+    def __init__(self, in_channels, out_channels):
         super(DEConvBlock, self).__init__()
         self.fwd = nn.Sequential(
-            nn.ConvTranspose2d(in_channels, mid_channels, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(mid_channels),
-            nn.ReLU(),
-            nn.ConvTranspose2d(mid_channels, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(),
-            nn.ConvTranspose2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
+            ResidualBlock(out_channels),
         )
 
     def forward(self, x):
@@ -54,29 +73,27 @@ class MyModel(nn.Module):
         super(MyModel, self).__init__()
 
         self.backbone = nn.ModuleList([
-            ENConvBlock(3, 16, 32),    # 64x64 -> 32x32
-            ENConvBlock(32, 64, 64),   # 32x32 -> 16x16
-            ENConvBlock(64, 128, 128), # 16x16 -> 8x8
-            ENConvBlock(128, 256, 256) # 8x8 -> 4x4
+            ENConvBlock(3, 16),    # 64x64 -> 32x32
+            ENConvBlock(16, 32),   # 32x32 -> 16x16
+            ENConvBlock(32, 64), # 16x16 -> 8x8
+            ENConvBlock(64, 128) # 8x8 -> 4x4
         ])
 
         self.classification_head = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),  # 16x16 -> 1x1
             nn.Flatten(),
-            nn.Linear(256, 128),
+            nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(128, output_size)
+            nn.Dropout(0.3),
+            nn.Linear(64, output_size)
         )
         
         self.segmentation_head = nn.ModuleList([
-            DEConvBlock(256, 128, 128),  # 4x4 -> 8x8
-            DEConvBlock(256, 64, 64),    # 8x8 -> 16x16
-            DEConvBlock(128, 32, 32),   # 16x16 -> 32x32
+            DEConvBlock(128, 64),  # 4x4 -> 8x8
+            DEConvBlock(128, 32),    # 8x8 -> 16x16
+            DEConvBlock(64, 16),   # 16x16 -> 32x32
             nn.Sequential(
-                nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
-                nn.ReLU(),
-                nn.ConvTranspose2d(32, 1, kernel_size=3, stride=1, padding=1),
+                nn.ConvTranspose2d(32, 1, kernel_size=4, stride=2, padding=1),
             )
         ])   
 
