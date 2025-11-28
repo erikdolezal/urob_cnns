@@ -370,30 +370,6 @@ def compute_triplet_loss(triplets, margin=1.0):  # ‼️‼️‼️‼️
 
     return loss
 
-def compute_dice_loss(pred, target, smooth=1):
-    """
-    Computes the Dice Loss for binary segmentation.
-    Args:
-        pred: Tensor of predictions (batch_size, 1, H, W).
-        target: Tensor of ground truth (batch_size, 1, H, W).
-        smooth: Smoothing factor to avoid division by zero.
-    Returns:
-        Scalar Dice Loss.
-    """
-    # Apply sigmoid to convert logits to probabilities
-    pred = torch.sigmoid(pred)
-    
-    # Calculate intersection and union
-    intersection = (pred * target).sum(dim=(2, 3))
-    union = pred.sum(dim=(2, 3)) + target.sum(dim=(2, 3))
-    
-    # Compute Dice Coefficient
-    dice = (2. * intersection + smooth) / (union + smooth)
-    
-    # Return Dice Loss
-    return 1 - dice.mean()
-
-
 def compute_roc_metrics(model, dataset, target_fpr=0.05, embedding_bank=None, all_labels=None):
     """
     Vectorized ROC computation for embedding-based similarity - only uses valid (non-NaN) embeddings.
