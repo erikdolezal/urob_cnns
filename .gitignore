@@ -1,0 +1,6 @@
+
+# Ignore large dataset and experiment outputs
+/fruit/
+/experiments/
+/*_sub/
+/__pycache__/
