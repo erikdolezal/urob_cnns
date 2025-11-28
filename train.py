@@ -112,7 +112,6 @@ class FruitDataset(Dataset):
 
         return image, mask, metadata, label, idx
 
-
 def setup_experiment_dir(config):
     """
     Create experiment directory with timestamp and setup logging
@@ -496,9 +495,9 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
                           leave=False, unit="batch")
 
         for batch_idx, (images, masks, metadata, labels, idxs) in enumerate(train_pbar):
-            images = images.to(device)
-            masks = masks.to(device)
-            labels = labels.to(device)
+            images = images.to(device, non_blocking=True)
+            masks = masks.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
 
             # ‼️‼️‼️‼️ ZERO GRAD! ‼️‼️‼️‼️
             optimizer.zero_grad()
@@ -517,7 +516,7 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
             classification_loss = species_criterion(outputs, labels) # ‼️‼️‼️‼️ compute species loss ‼️‼️‼️‼️
 
             # Segmentation loss - ensure both tensors are float32 and same shape
-            segmentation_loss = mask_criterion(masks_pred, masks) + compute_dice_loss(masks_pred, masks)  # ‼️‼️‼️‼️ compute mask loss ‼️‼️‼️‼️
+            segmentation_loss = mask_criterion(masks_pred, masks)  # ‼️‼️‼️‼️ compute mask loss ‼️‼️‼️‼️
 
             # triplet loss
             triplets = create_triplets_batch(embeddings, labels, idxs, embedding_bank, all_labels) # ‼️‼️‼️‼️ create triplets ‼️‼️‼️‼️
@@ -538,18 +537,18 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
                 continue
 
             # ‼️‼️‼️‼️ BACKPROPAGATE AND MAKE OPTIMIZER STEP ‼️‼️‼️‼️
+            loss.backward()
+            optimizer.step()
 
             batch_loss = loss.item()
             trn_loss += batch_loss
 
-            loss.backward()
-            optimizer.step()
-
             # Calculate training accuracy (add this section for TensorBoard logging)
             # ‼️‼️‼️‼️ Students: calculate predictions from outputs and compare with labels ‼️‼️‼️‼️
-            predictions = outputs.argmax(dim=1)
-            train_correct += (predictions == labels).sum().item()
-            train_total += labels.size(0)
+            with torch.no_grad():
+                predictions = outputs.argmax(dim=1)
+                train_correct += (predictions == labels).sum().item()
+                train_total += labels.size(0)
 
             # Update progress bar with current batch loss and average loss
             avg_loss = trn_loss / (batch_idx + 1)
@@ -610,7 +609,7 @@ def run_fold(train_loader, val_loader, config, fold_num, exp_dir, logger, model,
                     # Segmentation loss
                     segmentation_loss = mask_criterion(masks_pred, masks) # ‼️‼️‼️‼️ compute mask loss ‼️‼️‼️‼️
                     # triplet loss using updated embedding bank
-                    triplets = create_triplets_batch(all_embeddings, labels, idxs, embedding_bank_val, all_labels_val) # ‼️‼️‼️‼️ create triplets ‼️‼️‼️‼️
+                    triplets = create_triplets_batch(embeddings, labels, idxs, embedding_bank_val, all_labels_val) # ‼️‼️‼️‼️ create triplets ‼️‼️‼️‼️
 
                     if len(triplets) > 0:
                         triplet_loss = compute_triplet_loss(triplets, config['triplet_margin']) # ‼️‼️‼️‼️ compute triplet loss ‼️‼️‼️‼️
